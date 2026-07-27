@@ -387,19 +387,17 @@ async function openTaskModal(task) {
         document.getElementById('taskDueAt').value = '';
     }
 
-    const listSelect = document.getElementById('taskList');
-    listSelect.innerHTML = '<option value="">Uncategorized</option>';
+    const listSelect = document.getElementById('taskListSelect');
+    let html = '<option value="">Uncategorized</option>';
     if (Array.isArray(lists)) {
         lists.forEach(list => {
             if (list && list._id) {
-                const opt = document.createElement('option');
-                opt.value = list._id;
-                opt.textContent = list.name || 'Unnamed';
-                if (task && task.taskListId === list._id) opt.selected = true;
-                listSelect.appendChild(opt);
+                const selected = task && task.taskListId === list._id ? ' selected' : '';
+                html += `<option value="${list._id}"${selected}>${escapeHtml(list.name) || 'Unnamed'}</option>`;
             }
         });
     }
+    listSelect.innerHTML = html;
 
     document.getElementById('taskRecurring').checked = task ? task.isRecurring : false;
     document.getElementById('taskRecurrenceRule').value = task ? (task.recurrenceRule || 'daily') : 'daily';
@@ -419,7 +417,7 @@ async function saveTask() {
         title: document.getElementById('taskTitle').value,
         description: document.getElementById('taskDescription').value,
         priority: document.getElementById('taskPriority').value,
-        taskListId: document.getElementById('taskList').value || null,
+        taskListId: document.getElementById('taskListSelect').value || null,
         dueAt: document.getElementById('taskDueAt').value || null,
         isRecurring: document.getElementById('taskRecurring').checked,
         recurrenceRule: document.getElementById('taskRecurring').checked ? document.getElementById('taskRecurrenceRule').value : null

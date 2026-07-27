@@ -139,8 +139,8 @@
                 </div>
             </div>
             <div class="form-group">
-                <label for="taskList">List</label>
-                <select id="taskList"></select>
+                <label for="taskListSelect">List</label>
+                <select id="taskListSelect"></select>
             </div>
             <div class="form-group">
                 <label class="check-label">
