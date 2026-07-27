@@ -14,10 +14,23 @@ loadEnv();
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
+ob_start();
 
 set_error_handler(function ($severity, $message, $file, $line) {
     if (error_reporting() & $severity) {
         throw new ErrorException($message, 0, $severity, $file, $line);
+    }
+});
+
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        ob_end_clean();
+        $msg = 'Fatal: ' . $error['message'] . ' in ' . $error['file'] . ':' . $error['line'];
+        $resp = json_encode(['error' => $msg]);
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo $resp;
     }
 });
 
@@ -36,6 +49,7 @@ $routes = [
     '/forgot-password' => ['GET' => function () { require __DIR__ . '/views/forgot-password.php'; }],
 
     // API routes
+    '/api/ping' => ['GET' => function () { jsonResponse(['ok' => true, 'time' => date('c')]); }],
     '/api/auth/register' => ['POST' => function () { \CloudTasks\Controllers\AuthController::register(); }],
     '/api/auth/login' => ['POST' => function () { \CloudTasks\Controllers\AuthController::login(); }],
     '/api/auth/logout' => ['POST' => function () { \CloudTasks\Controllers\AuthController::logout(); }],
@@ -143,7 +157,10 @@ try {
         exit;
     }
 
-    jsonError('Not found', 404);
+    jsonError('Not found - ' . $uri, 404);
 } catch (Throwable $e) {
-    jsonError('Server error: ' . $e->getMessage(), 500);
+    ob_end_clean();
+    $msg = 'Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine();
+    error_log($msg);
+    jsonError($msg, 500);
 }

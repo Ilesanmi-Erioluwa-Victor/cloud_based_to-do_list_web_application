@@ -9,7 +9,12 @@ class AuthController
 {
     public static function register(): void
     {
-        $data = json_decode(file_get_contents('php://input'), true);
+        $raw = file_get_contents('php://input');
+        $data = json_decode($raw, true);
+
+        if (!is_array($data)) {
+            jsonError('Invalid JSON request body');
+        }
 
         if (empty($data['name']) || empty($data['email']) || empty($data['password'])) {
             jsonError('Name, email, and password are required');
@@ -46,7 +51,12 @@ class AuthController
 
     public static function login(): void
     {
-        $data = json_decode(file_get_contents('php://input'), true);
+        $raw = file_get_contents('php://input');
+        $data = json_decode($raw, true);
+
+        if (!is_array($data)) {
+            jsonError('Invalid JSON request body');
+        }
 
         if (empty($data['email']) || empty($data['password'])) {
             jsonError('Email and password are required');
