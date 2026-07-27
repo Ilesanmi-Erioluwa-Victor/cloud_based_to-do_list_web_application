@@ -242,8 +242,11 @@ function renderTasks() {
                     </div>
                 </div>
                 <div class="task-actions">
-                    <button class="edit-task" data-id="${task._id}" title="Edit">&#x270F;&#xFE0F;</button>
-                    <button class="delete-task" data-id="${task._id}" title="Delete">&#x1F5D1;&#xFE0F;</button>
+                    ${currentView === 'trash'
+                        ? `<button class="restore-task" data-id="${task._id}" title="Restore">&#x21A9;&#xFE0F;</button>`
+                        : `<button class="edit-task" data-id="${task._id}" title="Edit">&#x270F;&#xFE0F;</button>`
+                    }
+                    <button class="delete-task" data-id="${task._id}" title="${currentView === 'trash' ? 'Delete permanently' : 'Delete'}">&#x1F5D1;&#xFE0F;</button>
                 </div>
             </div>
         `;
@@ -252,10 +255,21 @@ function renderTasks() {
             toggleComplete(task._id, this.checked, this);
         });
 
-        card.querySelector('.edit-task').addEventListener('click', function(e) {
-            e.stopPropagation();
-            openTaskModal(task);
-        });
+        const editBtn = card.querySelector('.edit-task');
+        if (editBtn) {
+            editBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                openTaskModal(task);
+            });
+        }
+
+        const restoreBtn = card.querySelector('.restore-task');
+        if (restoreBtn) {
+            restoreBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                confirmAction('Restore task?', 'This will move it back to your task list.', () => restoreTask(task._id));
+            });
+        }
 
         card.querySelector('.delete-task').addEventListener('click', function(e) {
             e.stopPropagation();
@@ -522,6 +536,11 @@ async function softDeleteTask(id) {
 
 async function permanentDeleteTask(id) {
     await apiDelete('/api/tasks/' + id + '/permanent');
+    await loadTasks();
+}
+
+async function restoreTask(id) {
+    await apiPost('/api/tasks/' + id + '/restore', {});
     await loadTasks();
 }
 
