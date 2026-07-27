@@ -3,24 +3,26 @@
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
-function generateJWT(array $payload): string
+function getJwtSecret(): string
 {
     $secret = env('JWT_SECRET');
     if (!$secret) {
         throw new RuntimeException('JWT_SECRET environment variable is not set');
     }
+    return hash('sha256', $secret, true);
+}
+
+function generateJWT(array $payload): string
+{
     $payload['iat'] = time();
     $payload['exp'] = time() + 86400 * 7;
-    return JWT::encode($payload, $secret, 'HS256');
+    return JWT::encode($payload, getJwtSecret(), 'HS256');
 }
 
 function decodeJWT(string $token): object
 {
-    $secret = env('JWT_SECRET');
-    if (!$secret) {
-        throw new RuntimeException('JWT_SECRET environment variable is not set');
-    }
-    return JWT::decode($token, new Key($secret, 'HS256'));
+    $key = new Key(getJwtSecret(), 'HS256');
+    return JWT::decode($token, $key);
 }
 
 function getAuthToken(): ?string
