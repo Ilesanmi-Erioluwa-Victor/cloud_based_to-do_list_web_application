@@ -27,7 +27,9 @@ function decodeJWT(string $token): object
 
 function getAuthToken(): ?string
 {
-    $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    $header = $_SERVER['HTTP_AUTHORIZATION']
+        ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+        ?? '';
     if (preg_match('/Bearer\s+(.+)$/i', $header, $matches)) {
         return $matches[1];
     }

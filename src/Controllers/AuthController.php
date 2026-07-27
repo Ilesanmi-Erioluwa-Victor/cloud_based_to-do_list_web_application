@@ -42,6 +42,14 @@ class AuthController
 
         $token = generateJWT(['sub' => $userId]);
 
+        setcookie('auth_token', $token, [
+            'expires' => time() + 86400 * 7,
+            'path' => '/',
+            'secure' => true,
+            'httponly' => true,
+            'samesite' => 'Strict'
+        ]);
+
         jsonResponse([
             'message' => 'Registration successful. Please verify your email.',
             'userId' => $userId,
