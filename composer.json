@@ -15,6 +15,7 @@
         }
     },
     "scripts": {
-        "serve": "php -S 0.0.0.0:8000 -t public"
+        "serve": "php -S 0.0.0.0:8000 -t public",
+        "create-indexes": "php scripts/create-indexes.php"
     }
 }

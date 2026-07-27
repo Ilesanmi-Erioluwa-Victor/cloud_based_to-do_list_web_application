@@ -284,7 +284,8 @@ function setupEventListeners() {
         });
     });
 
-    document.getElementById('addTaskBtn').addEventListener('click', function() {
+    document.getElementById('addTaskBtn').addEventListener('click', async function() {
+        await loadLists();
         openTaskModal(null);
     });
 
@@ -371,7 +372,7 @@ function setupEventListeners() {
     });
 }
 
-function openTaskModal(task) {
+async function openTaskModal(task) {
     const modal = document.getElementById('taskModal');
     document.getElementById('modalTitle').textContent = task ? 'Edit Task' : 'New Task';
     document.getElementById('taskId').value = task ? task._id : '';
@@ -388,13 +389,17 @@ function openTaskModal(task) {
 
     const listSelect = document.getElementById('taskList');
     listSelect.innerHTML = '<option value="">Uncategorized</option>';
-    lists.forEach(list => {
-        const opt = document.createElement('option');
-        opt.value = list._id;
-        opt.textContent = list.name;
-        if (task && task.taskListId === list._id) opt.selected = true;
-        listSelect.appendChild(opt);
-    });
+    if (Array.isArray(lists)) {
+        lists.forEach(list => {
+            if (list && list._id) {
+                const opt = document.createElement('option');
+                opt.value = list._id;
+                opt.textContent = list.name || 'Unnamed';
+                if (task && task.taskListId === list._id) opt.selected = true;
+                listSelect.appendChild(opt);
+            }
+        });
+    }
 
     document.getElementById('taskRecurring').checked = task ? task.isRecurring : false;
     document.getElementById('taskRecurrenceRule').value = task ? (task.recurrenceRule || 'daily') : 'daily';
