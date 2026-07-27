@@ -67,10 +67,10 @@ async function initApp() {
     switchView('today');
 
     pollInterval = setInterval(() => {
-        if (currentView !== 'dashboard') loadTasks();
+        if (currentView !== 'dashboard') loadTasks(true);
     }, 30000);
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && currentView !== 'dashboard') loadTasks();
+        if (!document.hidden && currentView !== 'dashboard') loadTasks(true);
     });
 }
 
@@ -102,7 +102,16 @@ function switchView(view) {
     }
 }
 
-async function loadTasks() {
+async function loadTasks(silent) {
+    const loading = document.getElementById('taskLoading');
+    const container = document.getElementById('taskList');
+    const emptyState = document.getElementById('emptyState');
+    if (!silent) {
+        container.style.display = 'none';
+        emptyState.style.display = 'none';
+        loading.style.display = 'flex';
+    }
+
     let url = '/api/tasks';
     const params = new URLSearchParams();
 
@@ -129,12 +138,22 @@ async function loadTasks() {
     if (query) url += '?' + query;
 
     tasks = await apiGet(url) || [];
+    loading.style.display = 'none';
+    container.style.display = '';
     renderTasks();
 }
 
 async function loadDashboard() {
+    document.getElementById('dashLoading').style.display = 'flex';
+    document.querySelector('#dashboardView h2').style.display = 'none';
+    document.querySelector('#dashboardView .stats-grid').style.display = 'none';
+
     const stats = await apiGet('/api/dashboard/stats');
     if (!stats) return;
+
+    document.getElementById('dashLoading').style.display = 'none';
+    document.querySelector('#dashboardView h2').style.display = '';
+    document.querySelector('#dashboardView .stats-grid').style.display = 'grid';
     document.getElementById('statTotal').textContent = stats.totalTasks || 0;
     document.getElementById('statCompleted').textContent = stats.completedTasks || 0;
     document.getElementById('statPending').textContent = stats.pendingTasks || 0;
@@ -230,7 +249,7 @@ function renderTasks() {
         `;
 
         card.querySelector('.task-checkbox').addEventListener('change', function() {
-            toggleComplete(task._id, this.checked);
+            toggleComplete(task._id, this.checked, this);
         });
 
         card.querySelector('.edit-task').addEventListener('click', function(e) {
@@ -263,6 +282,19 @@ function formatDate(dateStr) {
     return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 }
 
+function setLoading(btn, loading) {
+    if (loading) {
+        btn.dataset.originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner"></span> Saving...';
+        btn.disabled = true;
+        btn.classList.add('btn-loading');
+    } else {
+        btn.innerHTML = btn.dataset.originalText || 'Save';
+        btn.disabled = false;
+        btn.classList.remove('btn-loading');
+    }
+}
+
 function escapeHtml(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -292,7 +324,16 @@ function setupEventListeners() {
     document.getElementById('addListBtn').addEventListener('click', function() {
         const name = prompt('Enter list name:');
         if (name && name.trim()) {
-            apiPost('/api/lists', { name: name.trim() }).then(() => loadLists());
+            this.textContent = 'Creating...';
+            this.disabled = true;
+            apiPost('/api/lists', { name: name.trim() }).then(() => {
+                this.textContent = '+ New List';
+                this.disabled = false;
+                loadLists();
+            }).catch(() => {
+                this.textContent = '+ New List';
+                this.disabled = false;
+            });
         }
     });
 
@@ -354,10 +395,16 @@ function setupEventListeners() {
 
     document.getElementById('confirmYes').addEventListener('click', function() {
         if (window._confirmCallback) {
-            window._confirmCallback();
+            const cb = window._confirmCallback;
             window._confirmCallback = null;
+            this.textContent = 'Processing...';
+            this.disabled = true;
+            Promise.resolve(cb()).finally(() => {
+                this.textContent = 'Yes';
+                this.disabled = false;
+                closeModals();
+            });
         }
-        closeModals();
     });
 
     document.getElementById('confirmNo').addEventListener('click', function() {
@@ -412,9 +459,15 @@ function closeModals() {
 }
 
 async function saveTask() {
+    const btn = document.querySelector('#taskForm .btn-primary');
+    const title = document.getElementById('taskTitle').value.trim();
+    if (!title) return;
+
+    setLoading(btn, true);
+
     const id = document.getElementById('taskId').value;
     const data = {
-        title: document.getElementById('taskTitle').value,
+        title,
         description: document.getElementById('taskDescription').value,
         priority: document.getElementById('taskPriority').value,
         taskListId: document.getElementById('taskListSelect').value || null,
@@ -423,31 +476,32 @@ async function saveTask() {
         recurrenceRule: document.getElementById('taskRecurring').checked ? document.getElementById('taskRecurrenceRule').value : null
     };
 
-    if (!data.title.trim()) return;
-
     if (id) {
         await apiPatch('/api/tasks/' + id, data);
     } else {
         await apiPost('/api/tasks', data);
     }
 
+    setLoading(btn, false);
     closeModals();
     loadTasks();
 }
 
-async function toggleComplete(id, completed) {
+async function toggleComplete(id, completed, checkbox) {
+    if (checkbox) checkbox.disabled = true;
     await apiPatch('/api/tasks/' + id + '/complete', { completed });
+    if (checkbox) checkbox.disabled = false;
     loadTasks();
 }
 
 async function softDeleteTask(id) {
     await apiDelete('/api/tasks/' + id);
-    loadTasks();
+    await loadTasks();
 }
 
 async function permanentDeleteTask(id) {
     await apiDelete('/api/tasks/' + id + '/permanent');
-    loadTasks();
+    await loadTasks();
 }
 
 function confirmAction(title, message, callback) {

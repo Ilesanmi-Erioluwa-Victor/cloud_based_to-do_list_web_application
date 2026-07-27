@@ -84,6 +84,7 @@
                     <button id="addTaskBtn" class="btn btn-primary">+ New Task</button>
                 </div>
 
+                <div class="loading" id="taskLoading" style="display:none"><div class="spinner"></div><span>Loading tasks...</span></div>
                 <div id="taskList" class="task-list"></div>
                 <div id="emptyState" class="empty-state" style="display:none">
                     <p>No tasks found</p>
@@ -91,8 +92,9 @@
             </div>
 
             <div id="dashboardView" style="display:none">
-                <h2>Dashboard</h2>
-                <div class="stats-grid">
+                <div class="loading" id="dashLoading"><div class="spinner"></div><span>Loading dashboard...</span></div>
+                <h2 style="display:none">Dashboard</h2>
+                <div class="stats-grid" style="display:none">
                     <div class="stat-card"><h3>Total Tasks</h3><p id="statTotal">0</p></div>
                     <div class="stat-card"><h3>Completed</h3><p id="statCompleted">0</p></div>
                     <div class="stat-card"><h3>Pending</h3><p id="statPending">0</p></div>
