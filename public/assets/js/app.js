@@ -79,6 +79,7 @@ async function loadUser() {
     currentUser = await apiGet('/api/users/me');
     if (currentUser) {
         document.getElementById('userName').textContent = currentUser.name;
+        applyTheme(currentUser.themePreference);
     }
 }
 
@@ -341,6 +342,10 @@ function setLoading(btn, loading) {
     }
 }
 
+function applyTheme(theme) {
+    document.documentElement.classList.toggle('dark-theme', theme === 'dark');
+}
+
 function escapeHtml(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -595,6 +600,7 @@ async function saveSettings() {
         themePreference: document.getElementById('settingsTheme').value
     };
     await apiPatch('/api/users/me', data);
+    applyTheme(data.themePreference);
     currentUser = await apiGet('/api/users/me');
     if (currentUser) document.getElementById('userName').textContent = currentUser.name;
     setLoading(btn, false);
