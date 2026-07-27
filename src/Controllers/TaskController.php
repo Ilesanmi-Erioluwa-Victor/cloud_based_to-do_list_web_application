@@ -148,7 +148,11 @@ class TaskController
         if (!$task) {
             $collection = getCollection('tasks');
             $doc = $collection->findOne(['_id' => new \MongoDB\BSON\ObjectId($taskId)]);
-            if (!$doc || $doc->jsonSerialize()['userId'] !== $userId) {
+            if (!$doc) {
+                jsonError('Task not found', 404);
+            }
+            $data = (array)$doc->jsonSerialize();
+            if ($data['userId'] !== $userId) {
                 jsonError('Task not found', 404);
             }
         }

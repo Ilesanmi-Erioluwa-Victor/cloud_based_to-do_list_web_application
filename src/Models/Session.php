@@ -27,11 +27,11 @@ class Session
     {
         $collection = getCollection('sessions');
         $hash = hash('sha256', $token);
-        $session = $collection->findOne([
+        $doc = $collection->findOne([
             'tokenHash' => $hash,
             'expiresAt' => ['$gt' => new UTCDateTime()]
         ]);
-        return $session ? $session->jsonSerialize() : null;
+        return $doc ? self::toArray($doc) : null;
     }
 
     public static function deleteByToken(string $token): void
@@ -44,5 +44,14 @@ class Session
     {
         $collection = getCollection('sessions');
         $collection->deleteMany(['userId' => $userId]);
+    }
+
+    private static function toArray($doc): array
+    {
+        $arr = (array)$doc->jsonSerialize();
+        if (isset($arr['_id']) && $arr['_id'] instanceof ObjectId) {
+            $arr['_id'] = (string)$arr['_id'];
+        }
+        return $arr;
     }
 }

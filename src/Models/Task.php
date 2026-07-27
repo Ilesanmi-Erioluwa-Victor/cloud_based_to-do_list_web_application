@@ -26,8 +26,7 @@ class Task
     {
         $collection = getCollection('tasks');
         $doc = $collection->findOne(['_id' => new ObjectId($id)]);
-        if (!$doc) return null;
-        return self::serialize($doc);
+        return $doc ? self::toArray($doc) : null;
     }
 
     public static function findByUser(string $userId, array $filters = [], array $sort = []): array
@@ -42,7 +41,7 @@ class Task
         $cursor = $collection->find($query, ['sort' => $sort]);
         $tasks = [];
         foreach ($cursor as $doc) {
-            $tasks[] = self::serialize($doc);
+            $tasks[] = self::toArray($doc);
         }
         return $tasks;
     }
@@ -56,7 +55,7 @@ class Task
         );
         $tasks = [];
         foreach ($cursor as $doc) {
-            $tasks[] = self::serialize($doc);
+            $tasks[] = self::toArray($doc);
         }
         return $tasks;
     }
@@ -125,10 +124,12 @@ class Task
         ]);
     }
 
-    private static function serialize($doc): array
+    private static function toArray($doc): array
     {
-        $arr = $doc->jsonSerialize();
-        $arr['_id'] = (string)$arr['_id'];
+        $arr = (array)$doc->jsonSerialize();
+        if (isset($arr['_id']) && $arr['_id'] instanceof ObjectId) {
+            $arr['_id'] = (string)$arr['_id'];
+        }
         return $arr;
     }
 }

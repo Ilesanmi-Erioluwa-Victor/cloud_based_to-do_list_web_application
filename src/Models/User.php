@@ -24,14 +24,15 @@ class User
     public static function findByEmail(string $email): ?array
     {
         $collection = getCollection('users');
-        return $collection->findOne(['email' => $email])?->jsonSerialize();
+        $doc = $collection->findOne(['email' => $email]);
+        return $doc ? self::toArray($doc) : null;
     }
 
     public static function findById(string $id): ?array
     {
         $collection = getCollection('users');
         $doc = $collection->findOne(['_id' => new ObjectId($id)]);
-        return $doc ? self::serialize($doc) : null;
+        return $doc ? self::toArray($doc) : null;
     }
 
     public static function updateById(string $id, array $data): void
@@ -53,10 +54,12 @@ class User
         );
     }
 
-    private static function serialize($doc): array
+    private static function toArray($doc): array
     {
-        $arr = $doc->jsonSerialize();
-        $arr['_id'] = (string)$arr['_id'];
+        $arr = (array)$doc->jsonSerialize();
+        if (isset($arr['_id']) && $arr['_id'] instanceof ObjectId) {
+            $arr['_id'] = (string)$arr['_id'];
+        }
         return $arr;
     }
 }

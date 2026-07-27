@@ -5,6 +5,16 @@ namespace CloudTasks\Services;
 use CloudTasks\Models\ReminderLog;
 use CloudTasks\Models\User;
 use CloudTasks\Models\Task;
+use MongoDB\BSON\ObjectId;
+
+function docToArray($doc): array
+{
+    $arr = (array)$doc->jsonSerialize();
+    if (isset($arr['_id']) && $arr['_id'] instanceof ObjectId) {
+        $arr['_id'] = (string)$arr['_id'];
+    }
+    return $arr;
+}
 
 class ReminderService
 {
@@ -24,15 +34,17 @@ class ReminderService
 
         $overdueByUser = [];
 
-        foreach ($tasks as $task) {
-            $task = $task->jsonSerialize();
-            $taskId = (string)$task['_id'];
-            $dueAt = $task['dueAt']->toDateTime()->getTimestamp();
+        foreach ($tasks as $taskDoc) {
+            $task = docToArray($taskDoc);
+            $taskId = $task['_id'];
+            $dueAt = $task['dueAt'] instanceof \MongoDB\BSON\UTCDateTime
+                ? $task['dueAt']->toDateTime()->getTimestamp()
+                : strtotime($task['dueAt']);
 
-            $user = $usersCollection->findOne(['_id' => new \MongoDB\BSON\ObjectId($task['userId'])]);
-            if (!$user) continue;
+            $userDoc = $usersCollection->findOne(['_id' => new ObjectId($task['userId'])]);
+            if (!$userDoc) continue;
 
-            $userArr = $user->jsonSerialize();
+            $userArr = docToArray($userDoc);
             $timezone = $userArr['timezone'] ?? 'Africa/Lagos';
 
             try {
@@ -75,7 +87,9 @@ class ReminderService
         }
 
         foreach ($overdueByUser as $userId => $overdueTasks) {
-            $userArr = $usersCollection->findOne(['_id' => new \MongoDB\BSON\ObjectId($userId)])->jsonSerialize();
+            $userDoc = $usersCollection->findOne(['_id' => new ObjectId($userId)]);
+            if (!$userDoc) continue;
+            $userArr = docToArray($userDoc);
             if (empty($userArr['email']) || !($userArr['isEmailVerified'] ?? false)) continue;
 
             $ok = EmailService::sendOverdueDigest($userArr['email'], $userArr['name'] ?? '', $overdueTasks);

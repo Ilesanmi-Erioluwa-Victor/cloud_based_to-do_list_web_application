@@ -26,9 +26,7 @@ class TaskList
         );
         $lists = [];
         foreach ($cursor as $doc) {
-            $arr = $doc->jsonSerialize();
-            $arr['_id'] = (string)$arr['_id'];
-            $lists[] = $arr;
+            $lists[] = self::toArray($doc);
         }
         return $lists;
     }
@@ -37,10 +35,7 @@ class TaskList
     {
         $collection = getCollection('taskLists');
         $doc = $collection->findOne(['_id' => new ObjectId($id)]);
-        if (!$doc) return null;
-        $arr = $doc->jsonSerialize();
-        $arr['_id'] = (string)$arr['_id'];
-        return $arr;
+        return $doc ? self::toArray($doc) : null;
     }
 
     public static function updateById(string $id, array $data): void
@@ -57,5 +52,14 @@ class TaskList
     {
         $collection = getCollection('taskLists');
         $collection->deleteOne(['_id' => new ObjectId($id)]);
+    }
+
+    private static function toArray($doc): array
+    {
+        $arr = (array)$doc->jsonSerialize();
+        if (isset($arr['_id']) && $arr['_id'] instanceof ObjectId) {
+            $arr['_id'] = (string)$arr['_id'];
+        }
+        return $arr;
     }
 }
