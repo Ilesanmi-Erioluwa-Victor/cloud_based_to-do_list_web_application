@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CloudTasks - Task Manager</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
@@ -24,10 +25,14 @@
                     <li><a href="#" data-view="all" class="nav-item">All Tasks</a></li>
                 </ul>
             </div>
-            <div class="nav-section">
-                <h3>Lists</h3>
-                <ul id="taskLists"></ul>
-                <button id="addListBtn" class="btn-text">+ New List</button>
+            <div class="nav-section collapsible">
+                <h3 class="collapse-toggle" data-target="listsContent">
+                    Lists <span class="collapse-indicator">▼</span>
+                </h3>
+                <div id="listsContent" class="collapse-content">
+                    <ul id="taskLists"></ul>
+                    <button id="addListBtn" class="btn-text">+ New List</button>
+                </div>
             </div>
             <div class="nav-section">
                 <h3>More</h3>

@@ -321,6 +321,27 @@ function setupEventListeners() {
         openTaskModal(null);
     });
 
+    document.querySelectorAll('.collapse-toggle').forEach(el => {
+        el.addEventListener('click', function() {
+            const targetId = this.dataset.target;
+            const content = document.getElementById(targetId);
+            const indicator = this.querySelector('.collapse-indicator');
+            if (!content) return;
+            content.classList.toggle('collapsed');
+            if (indicator) indicator.classList.toggle('collapsed');
+            if (content.classList.contains('collapsed')) {
+                content.style.maxHeight = content.scrollHeight + 'px';
+                requestAnimationFrame(() => { content.style.maxHeight = '0'; });
+            } else {
+                content.style.maxHeight = content.scrollHeight + 'px';
+                content.addEventListener('transitionend', function handler() {
+                    content.style.maxHeight = '';
+                    content.removeEventListener('transitionend', handler);
+                });
+            }
+        });
+    });
+
     document.getElementById('addListBtn').addEventListener('click', function() {
         const name = prompt('Enter list name:');
         if (name && name.trim()) {
