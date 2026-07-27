@@ -11,6 +11,16 @@ require_once __DIR__ . '/../src/middleware/rateLimit.php';
 
 loadEnv();
 
+error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
+set_error_handler(function ($severity, $message, $file, $line) {
+    if (error_reporting() & $severity) {
+        throw new ErrorException($message, 0, $severity, $file, $line);
+    }
+});
+
 session_start();
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -106,30 +116,34 @@ if (preg_match('#^/assets/#', $uri) && file_exists($assetPath)) {
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// Handle OPTIONS preflight
-if ($method === 'OPTIONS') {
-    header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-CSRF-Token');
-    exit;
-}
+try {
+    // Handle OPTIONS preflight
+    if ($method === 'OPTIONS') {
+        header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-CSRF-Token');
+        exit;
+    }
 
-// Check static routes first
-if (isset($routes[$uri]) && isset($routes[$uri][$method])) {
-    $routes[$uri][$method]();
-    exit;
-}
+    // Check static routes first
+    if (isset($routes[$uri]) && isset($routes[$uri][$method])) {
+        $routes[$uri][$method]();
+        exit;
+    }
 
-// Check param routes
-$matched = matchRoute($uri, $paramRoutes);
-if ($matched && isset($matched['handlers'][$method])) {
-    $matched['handlers'][$method]($matched['params']);
-    exit;
-}
+    // Check param routes
+    $matched = matchRoute($uri, $paramRoutes);
+    if ($matched && isset($matched['handlers'][$method])) {
+        $matched['handlers'][$method]($matched['params']);
+        exit;
+    }
 
-// Check for GET-only routes
-if ($method === 'GET' && isset($routes[$uri])) {
-    $routes[$uri]['GET']();
-    exit;
-}
+    // Check for GET-only routes
+    if ($method === 'GET' && isset($routes[$uri])) {
+        $routes[$uri]['GET']();
+        exit;
+    }
 
-jsonError('Not found', 404);
+    jsonError('Not found', 404);
+} catch (Throwable $e) {
+    jsonError('Server error: ' . $e->getMessage(), 500);
+}

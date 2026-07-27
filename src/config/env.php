@@ -13,5 +13,6 @@ function loadEnv(): void
 
 function env(string $key, mixed $default = null): mixed
 {
-    return $_ENV[$key] ?? $_SERVER[$key] ?? $default;
+    $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
+    return $value !== false && $value !== null ? $value : $default;
 }
