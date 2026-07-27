@@ -5,6 +5,7 @@ let lists = [];
 let sortOrder = 'desc';
 let pollInterval = null;
 let sortField = 'createdAt';
+let currentUser = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     const token = localStorage.getItem('token');
@@ -75,9 +76,9 @@ async function initApp() {
 }
 
 async function loadUser() {
-    const user = await apiGet('/api/users/me');
-    if (user) {
-        document.getElementById('userName').textContent = user.name;
+    currentUser = await apiGet('/api/users/me');
+    if (currentUser) {
+        document.getElementById('userName').textContent = currentUser.name;
     }
 }
 
@@ -179,6 +180,37 @@ function renderChart(data) {
         bar.title = d.date + ': ' + d.count + ' completed';
         chart.appendChild(bar);
     });
+}
+
+const TIMEZONES = [
+    'Africa/Lagos', 'Africa/Cairo', 'Africa/Johannesburg', 'Africa/Nairobi',
+    'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Moscow',
+    'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+    'America/Sao_Paulo', 'America/Mexico_City',
+    'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore',
+    'Australia/Sydney', 'Pacific/Auckland', 'UTC'
+];
+
+function populateTimezoneSelect(select, selected) {
+    select.innerHTML = '';
+    TIMEZONES.forEach(tz => {
+        const opt = document.createElement('option');
+        opt.value = tz;
+        opt.textContent = tz;
+        if (tz === selected) opt.selected = true;
+        select.appendChild(opt);
+    });
+}
+
+function openSettingsModal() {
+    if (!currentUser) return;
+    document.getElementById('settingsName').value = currentUser.name || '';
+    populateTimezoneSelect(
+        document.getElementById('settingsTimezone'),
+        currentUser.timezone || 'Africa/Lagos'
+    );
+    document.getElementById('settingsTheme').value = currentUser.themePreference || 'light';
+    document.getElementById('settingsModal').style.display = 'flex';
 }
 
 function renderLists() {
@@ -328,6 +360,16 @@ function setupEventListeners() {
             this.classList.add('active');
             switchView(view);
         });
+    });
+
+    document.getElementById('settingsBtn').addEventListener('click', function(e) {
+        e.preventDefault();
+        openSettingsModal();
+    });
+
+    document.getElementById('settingsForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        saveSettings();
     });
 
     document.getElementById('addTaskBtn').addEventListener('click', async function() {
@@ -542,6 +584,21 @@ async function permanentDeleteTask(id) {
 async function restoreTask(id) {
     await apiPost('/api/tasks/' + id + '/restore', {});
     await loadTasks();
+}
+
+async function saveSettings() {
+    const btn = document.querySelector('#settingsForm .btn-primary');
+    setLoading(btn, true);
+    const data = {
+        name: document.getElementById('settingsName').value.trim(),
+        timezone: document.getElementById('settingsTimezone').value,
+        themePreference: document.getElementById('settingsTheme').value
+    };
+    await apiPatch('/api/users/me', data);
+    currentUser = await apiGet('/api/users/me');
+    if (currentUser) document.getElementById('userName').textContent = currentUser.name;
+    setLoading(btn, false);
+    closeModals();
 }
 
 function confirmAction(title, message, callback) {

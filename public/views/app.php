@@ -39,6 +39,7 @@
                 <ul>
                     <li><a href="#" data-view="trash" class="nav-item">Trash</a></li>
                     <li><a href="#" data-view="dashboard" class="nav-item">Dashboard</a></li>
+                    <li><a href="#" id="settingsBtn" class="nav-item">Settings</a></li>
                 </ul>
             </div>
         </nav>
@@ -165,6 +166,35 @@
             </div>
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Save</button>
+                <button type="button" class="btn btn-secondary modal-close-btn">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="modal" style="display:none">
+    <div class="modal-content modal-sm">
+        <span class="modal-close">&times;</span>
+        <h3>Settings</h3>
+        <form id="settingsForm">
+            <div class="form-group">
+                <label for="settingsName">Name</label>
+                <input type="text" id="settingsName" required>
+            </div>
+            <div class="form-group">
+                <label for="settingsTimezone">Timezone</label>
+                <select id="settingsTimezone"></select>
+            </div>
+            <div class="form-group">
+                <label for="settingsTheme">Theme</label>
+                <select id="settingsTheme">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                </select>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save Settings</button>
                 <button type="button" class="btn btn-secondary modal-close-btn">Cancel</button>
             </div>
         </form>
