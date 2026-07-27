@@ -143,7 +143,7 @@
                 <select id="taskList"></select>
             </div>
             <div class="form-group">
-                <label>
+                <label class="check-label">
                     <input type="checkbox" id="taskRecurring">
                     Recurring task
                 </label>
