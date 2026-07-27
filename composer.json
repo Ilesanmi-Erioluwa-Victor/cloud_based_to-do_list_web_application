@@ -4,7 +4,7 @@
     "type": "project",
     "require": {
         "php": ">=8.2",
-        "mongodb/mongodb": "^1.15",
+        "mongodb/mongodb": "^2.0",
         "cloudinary/cloudinary_php": "^2.12",
         "firebase/php-jwt": "^7.0",
         "vlucas/phpdotenv": "^5.6"
