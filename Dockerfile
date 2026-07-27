@@ -2,6 +2,9 @@ FROM php:8.2-apache
 
 RUN a2enmod rewrite
 
+RUN sed -ri "s!/var/www/html!/var/www/html/public!g" /etc/apache2/sites-available/*.conf \
+    && sed -ri "s!/var/www/!/var/www/html/public!g; s!AllowOverride None!AllowOverride All!g" /etc/apache2/apache2.conf
+
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
