@@ -1,0 +1,491 @@
+========================================================================
+DESIGN AND IMPLEMENTATION OF A CLOUD-BASED TO-DO LIST WEB APPLICATION
+MASTER CODEX / OPENCODE IMPLEMENTATION PROMPT (MongoDB + Cloudinary)
+========================================================================
+
+HOW TO USE THIS FILE
+---------------------
+Paste the "MASTER PROMPT" section into Codex/OpenCode (or Claude Code)
+as your first instruction, then build in the phases under "BUILD
+ORDER" — one phase at a time, testing before moving on.
+
+IMPORTANT CONSTRAINTS (READ BEFORE STARTING)
+-------------------------------------------------
+- Do NOT install, run, or require any database server locally on the
+  developer's machine. Use MongoDB Atlas (cloud) exclusively — no
+  local MongoDB installation, no Docker container running a database
+  for development or testing.
+- Do NOT use any local file storage. Use Cloudinary (cloud) exclusively
+  for every attachment/file upload — no local disk fallback, no
+  storing files in a local `uploads/` folder even temporarily.
+- Brevo must be used strictly via its transactional HTTP API with an
+  API key (`BREVO_API_KEY`) — never SMTP credentials, never a local
+  mail server, never PHPMailer-over-SMTP. Every email (verification,
+  password reset, reminders) goes through Brevo's HTTP API only.
+- Standard Composer dependencies required to run the app itself
+  (`mongodb/mongodb`, `cloudinary/cloudinary_php`, `vlucas/phpdotenv`,
+  `firebase/php-jwt`) are fine — the app needs these to function. Do
+  not introduce anything beyond what's strictly required to run the
+  PHP application (no local dev databases, no bulky extra tooling, no
+  large datasets to download).
+- ONE UNAVOIDABLE TECHNICAL NOTE: connecting to MongoDB from PHP
+  requires the `mongodb` PHP extension (installed via PECL) to be
+  present in whatever environment actually RUNS the PHP code — this
+  is a runtime requirement of the language/driver, not a "local
+  database install." On Render, use a Docker-based PHP environment
+  where the `mongodb` extension is installed inside the Dockerfile
+  (in the deployment environment, not on your personal machine). If
+  you need to run/test the PHP app itself somewhere, prefer doing so
+  in a cloud dev environment/container (e.g. within Codex/OpenCode's
+  own execution environment, or directly on Render) rather than
+  installing PHP + the mongodb extension on your own machine.
+
+========================================================================
+MASTER PROMPT (paste this in)
+========================================================================
+
+You are building "CloudTasks" — a cloud-based to-do list web
+application for a Nigerian polytechnic HND final year project. Users
+register, create and manage tasks across devices with cloud
+persistence, deadline reminders, prioritization, and progress
+tracking. Follow this spec exactly, and follow the IMPORTANT
+CONSTRAINTS above without exception. Build incrementally, one module
+at a time, confirming each works before moving to the next.
+
+PROJECT GOAL
+-------------
+A reliable, accessible task management platform that replaces paper
+notes and offline apps — data lives centrally in the cloud so it's
+available, backed up, and synchronized across any device the user logs
+into, with authentication, prioritization, deadline reminders, and
+progress tracking.
+
+TECH STACK (use exactly this)
+-------------------------------
+  - PHP 8.2 (procedural or lightweight MVC structure)
+  - MongoDB Atlas (cloud-hosted database, via the `mongodb/mongodb`
+    Composer library) — NOT PostgreSQL/MySQL, NOT a local database
+  - HTML5, CSS3, Vanilla JavaScript (no Bootstrap, no frontend
+    framework)
+  - Cloudinary for all file attachments (cloud storage + on-the-fly
+    thumbnail transformations) — NOT local disk, NOT Supabase Storage
+  - Brevo transactional HTTP API (cURL/axios POST with `BREVO_API_KEY`)
+    for email verification, password reset, and deadline reminder
+    emails — NOT SMTP, since Render blocks SMTP ports anyway and this
+    project must not touch a local mail setup
+  - Deployment: Render (Docker-based PHP web service, so the `mongodb`
+    extension can be installed in the image) + a Render Cron Job (or
+    an external trigger like cron-job.org hitting a protected
+    endpoint) for scheduled deadline-reminder checks
+  - Database hosting: MongoDB Atlas (cloud only)
+
+FOLDER STRUCTURE
+------------------
+cloudtasks/
+  public/
+    index.php
+    assets/ (css/, js/, images/)
+  src/
+    config/           (db.php — MongoDB client bootstrap using
+                        MONGODB_URI, env.php)
+    models/            (User.php, TaskList.php, Task.php,
+                          ReminderLog.php, Session.php)
+    controllers/
+    middleware/        (auth.php, rateLimit.php, csrf.php)
+    services/          (EmailService.php, ReminderService.php,
+                          CloudinaryService.php, RecurrenceService.php)
+    utils/
+    cron/
+      send-reminders.php   (invoked by the scheduled job)
+    views/             (plain PHP templates or partials)
+  composer.json
+  .env.example
+  Dockerfile             (includes the mongodb PHP extension install)
+  README.md
+
+DATABASE COLLECTIONS (MongoDB documents)
+--------------------------------------------
+users
+  _id, name, email (unique index), passwordHash,
+  isEmailVerified: bool,
+  timezone: string (e.g. "Africa/Lagos" default — deadline reminders
+    must fire at the RIGHT local time, not server UTC time),
+  themePreference: "light"|"dark",
+  createdAt, updatedAt, deletedAt (soft-delete for account closure)
+
+taskLists   (categories/projects — e.g. "Work", "Personal", "School")
+  _id, userId, name, color, position, createdAt, updatedAt
+
+tasks
+  _id, userId, taskListId (nullable = "Uncategorized"),
+  title, description,
+  priority: "low"|"medium"|"high",
+  status: "pending"|"in_progress"|"completed",
+  dueAt: Date (store in UTC, convert using the user's timezone on
+    display AND when scheduling reminders),
+  completedAt: Date|null,
+  isRecurring: bool, recurrenceRule: "daily"|"weekly"|"monthly"|null,
+  recurrenceParentId: ObjectId|null (links generated recurring
+    instances back to the original task),
+  position: number (for manual drag-reorder within a list),
+  subtasks: [
+    { _id, title, isCompleted: bool, position }
+  ]   // embedded array — MongoDB's document model means subtasks
+       // don't need a separate collection/join; fetched with the
+       // task in one query
+  attachments: [
+    { url, publicId, fileName, fileSize, uploadedAt }
+  ]   // Cloudinary secure_url + public_id per file, embedded directly
+       // on the task document
+  createdAt, updatedAt, deletedAt (soft-delete/trash bin)
+
+reminderLogs   (kept as its OWN collection, not embedded, so cron
+                 dedup queries stay fast and simple)
+  _id, taskId, sentAt, reminderType: "24h_before"|"1h_before"|
+  "overdue", status: "sent"|"failed"
+  // prevents duplicate reminder emails being sent twice for the same
+  // task/threshold if the cron job runs more often than the reminder
+  // window, or overlaps a prior run
+
+sessions (if not using pure JWT — lets you support "log out of all
+  devices")
+  _id, userId, tokenHash, createdAt, expiresAt, userAgent, ipAddress
+
+Indexes to create in MongoDB Atlas:
+  - users.email (unique)
+  - tasks: compound index on (userId, dueAt) for fast smart-view
+    queries (Today/Upcoming/Overdue)
+  - tasks: compound index on (userId, taskListId)
+  - reminderLogs: compound index on (taskId, reminderType) for fast
+    dedup checks during the cron run
+
+CORE FEATURES — COVER EVERY SCENARIO BELOW
+----------------------------------------------
+
+1. AUTHENTICATION
+   - Register/login, bcrypt/argon2 password hashing
+   - Email verification via Brevo's API before full account access (or
+     at minimum before reminder emails are sent to that address)
+   - Password reset flow with a single-use, time-limited token
+   - Session handling via secure httpOnly cookies or JWT — either is
+     fine, but document your choice in Chapter 3; support "log out of
+     all devices" via the sessions collection if you choose that route
+   - Rate limiting on login/register/password-reset endpoints
+   - CSRF protection on all state-changing form submissions
+
+2. TASK LISTS / CATEGORIES
+   - Create/rename/delete/reorder custom lists (Work, Personal, etc.)
+   - Deleting a list must NOT silently delete its tasks — either
+     require the list to be empty first, or reassign its tasks to
+     "Uncategorized" (choose one, document the choice)
+
+3. TASK CRUD — THE CORE FEATURE
+   - Create/edit/delete tasks with title, description, priority, due
+     date+time, list assignment
+   - Soft delete: deleted tasks go to a "Trash" view with a restore
+     option for a configurable window (e.g. 30 days) before permanent
+     removal
+   - Mark complete/incomplete (toggle), with `completedAt` recorded for
+     progress-tracking analytics
+   - Subtasks/checklist items embedded on the task document, each
+     independently toggleable, parent task showing an "X of Y done"
+     count
+   - Drag-and-drop or up/down reordering within a list (position
+     field), implemented in vanilla JS (no framework)
+   - Optional file attachment per task via Cloudinary — enforce a file
+     size/type limit server-side, not just in the frontend `accept`
+     attribute; upload happens through a signed server-side Cloudinary
+     call (never expose your Cloudinary API secret in frontend JS)
+
+4. RECURRING TASKS (explicit scenario handling)
+   - A task can be marked recurring (daily/weekly/monthly)
+   - When a recurring task is marked complete, the system generates
+     the NEXT occurrence automatically (a new task document linked via
+     `recurrenceParentId`) rather than mutating the same document —
+     this preserves history so progress-tracking stats aren't
+     corrupted
+   - Deleting a recurring task should ask: "delete just this occurrence
+     or the whole recurring series?" — handle both paths explicitly
+   - Editing a recurring task's due time/priority should ask whether
+     the change applies to future occurrences only or this one alone
+
+5. PRIORITIZATION & ORGANIZATION
+   - Priority levels (low/medium/high) with clear visual distinction
+   - Filter/sort by: priority, due date, status, list, creation date
+   - Search across task titles/descriptions
+   - "Today", "Upcoming", "Overdue", "Completed" smart views computed
+     from dueAt/status rather than manually maintained flags
+   - Overdue tasks (dueAt in the past AND status != completed)
+     visually highlighted distinctly across every view
+
+6. DEADLINE REMINDERS (the "cloud-based" differentiator worth
+   detailing carefully)
+   - A scheduled job (Render Cron Job, or an external trigger hitting
+     a protected `/cron/send-reminders` endpoint every 15 minutes)
+     scans for tasks whose dueAt falls within upcoming reminder windows
+     (e.g. 24 hours before, 1 hour before) AND haven't already had that
+     reminder logged in reminderLogs for this task+type
+   - Convert dueAt (stored UTC) to the task owner's stored timezone
+     BEFORE deciding whether a reminder threshold has been crossed
+   - Send the reminder via Brevo's transactional HTTP API using
+     BREVO_API_KEY, then log it in reminderLogs immediately so a cron
+     overlap or retry never sends a duplicate email
+   - Also send an "overdue" digest-style reminder — batch a user's
+     overdue tasks into a single digest email per run, not one email
+     per overdue task
+   - In-app notification/badge for upcoming and overdue tasks,
+     independent of the email reminder
+
+7. PROGRESS TRACKING
+   - Per-list completion percentage (completed tasks / total tasks in
+     that list, excluding trashed tasks)
+   - Overall dashboard: tasks completed today/this week, current
+     streak of days with at least one task completed, overdue count,
+     upcoming count
+   - Simple chart (plain HTML/CSS bars, or a lightweight approach) of
+     completions over the last 7/30 days
+
+8. MULTI-DEVICE SYNC (explicit design note for your Chapter 3)
+   - Because all data lives centrally in MongoDB Atlas rather than in
+     browser local storage, "sync across devices" is inherent to the
+     architecture — logging in from any device shows the same data
+   - For a near-real-time feel across multiple open tabs/devices
+     without full WebSocket infrastructure, implement periodic
+     polling (e.g. re-fetch the task list every 20-30 seconds, or on
+     window focus) — document this as a deliberate, pragmatic choice
+     rather than claiming true push-based real-time sync
+   - Use `updatedAt` timestamps for simple last-write-wins conflict
+     resolution if the same task is edited from two devices near-
+     simultaneously; document this limitation honestly
+
+9. DATA EXPORT / BACKUP (answers the abstract's "backup" claim
+   concretely)
+   - "Export my tasks" button -> download a JSON or CSV snapshot of
+     all the user's tasks/lists — a tangible backup artifact and an
+     easy, demonstrable feature for your defense
+
+10. RESPONSIVE UI
+    - Mobile-first CSS (flexbox/grid, media queries) — no framework
+    - Test at common breakpoints (mobile ~375px, tablet ~768px,
+      desktop ~1200px+)
+    - Touch-friendly controls for mobile
+
+EDGE CASES TO EXPLICITLY HANDLE
+------------------------------------
+  - User sets a due date in the past -> either warn before saving or
+    accept it and immediately show it as overdue; pick one and be
+    consistent
+  - User changes their timezone setting after tasks already exist ->
+    dueAt values (stored UTC) don't change, but DISPLAYED local time
+    and reminder-scheduling calculations must immediately reflect the
+    new timezone on next render/cron run
+  - Deleting a task list that still has active (non-trashed) tasks ->
+    handled per section 2 above (reassign or block), never silent
+    cascade-delete
+  - Restoring a task from Trash whose parent list was deleted in the
+    meantime -> reassign to "Uncategorized" rather than erroring
+  - A recurring task's series is deleted while an instance is
+    mid-cycle -> clarify in the confirmation dialog exactly which
+    documents are affected before committing
+  - Cron job runs twice for the same window (overlap/retry) ->
+    reminderLogs prevents duplicate sends
+  - User has zero tasks (brand-new account) -> friendly empty states
+    on every view
+  - Very long task titles/descriptions -> truncate with "show more" in
+    list views
+  - Bulk operations (select multiple tasks -> mark complete/delete) ->
+    confirm before a bulk permanent action, make bulk soft-delete (to
+    Trash) the default, not bulk permanent delete
+  - Session/token expiry mid-edit -> fail gracefully with a clear
+    "please log in again" message rather than silently discarding
+    unsaved changes
+  - Cloudinary upload failure (network error, size limit exceeded) ->
+    clear retry option, task itself still saves even if the attachment
+    step fails
+  - Deleting a task or account: remove the associated Cloudinary
+    assets (via the Admin API `destroy` call using each attachment's
+    `publicId`) rather than leaving orphaned files accumulating in
+    your Cloudinary account
+
+API/ROUTES (high level)
+--------------------------
+POST   /api/auth/register
+POST   /api/auth/verify-email
+POST   /api/auth/login
+POST   /api/auth/logout
+POST   /api/auth/logout-all-devices
+POST   /api/auth/forgot-password
+POST   /api/auth/reset-password
+GET    /api/users/me
+PATCH  /api/users/me                  (timezone, theme, name)
+GET    /api/lists
+POST   /api/lists
+PATCH  /api/lists/:id
+DELETE /api/lists/:id
+GET    /api/tasks                      (query: list, status, priority,
+                                          view=today|upcoming|overdue|
+                                          completed, search, sort)
+POST   /api/tasks
+PATCH  /api/tasks/:id
+DELETE /api/tasks/:id                   (soft delete -> trash)
+POST   /api/tasks/:id/restore
+DELETE /api/tasks/:id/permanent
+PATCH  /api/tasks/:id/complete
+POST   /api/tasks/:id/subtasks
+PATCH  /api/tasks/:id/subtasks/:subtaskId
+DELETE /api/tasks/:id/subtasks/:subtaskId
+POST   /api/tasks/:id/attachments      (signed Cloudinary upload)
+DELETE /api/tasks/:id/attachments/:publicId
+GET    /api/dashboard/stats
+GET    /api/export                      (JSON/CSV download)
+GET    /cron/send-reminders             (protected — secret header/
+                                          token check, called only by
+                                          the scheduled job, never
+                                          exposed as a public button)
+
+ENVIRONMENT VARIABLES (.env.example)
+-----------------------------------------
+MONGODB_URI=
+JWT_SECRET=                       (or SESSION_SECRET, per your choice)
+BREVO_API_KEY=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+CRON_SECRET=                       (shared secret the scheduled job
+                                      must send to hit /cron/send-
+                                      reminders)
+APP_URL=
+APP_ENV=
+
+BUILD ORDER (build in this exact order, one phase at a time)
+------------------------------------------------------------------
+Phase 1: PHP + MongoDB Atlas connection bootstrap, User model,
+         register/login/session auth (no tasks yet)
+Phase 2: Email verification + password reset via Brevo's API
+Phase 3: Task lists CRUD + Task CRUD (basic — title, description, due
+         date, priority, status; no recurrence/subtasks/attachments
+         yet)
+Phase 4: Soft-delete/Trash + restore flow
+Phase 5: Embedded subtasks + drag/reorder (position field) in
+         vanilla JS
+Phase 6: Smart views (Today/Upcoming/Overdue/Completed), search,
+         filter, sort
+Phase 7: Recurring tasks (generation of next occurrence, series vs
+         single-occurrence delete/edit prompts)
+Phase 8: Deadline reminders — cron endpoint, timezone-aware threshold
+         calculation, reminderLogs dedup, Brevo API email sending,
+         overdue digest batching
+Phase 9: Progress tracking dashboard (per-list %, streak, 7/30-day
+         completions chart) + data export (JSON/CSV)
+Phase 10: Cloudinary attachments (signed uploads, delete-on-remove),
+          responsive UI pass across breakpoints, full edge-case
+          hardening, deployment to Render (Docker, with the mongodb
+          PHP extension in the image) + Render Cron Job + MongoDB
+          Atlas
+
+Do not move to the next phase until the current one is fully working
+and testable end-to-end.
+
+========================================================================
+STEP-BY-STEP EXECUTION GUIDE (for you, the developer)
+========================================================================
+
+1. SET UP ACCOUNTS/SERVICES FIRST (all cloud, nothing local)
+   - MongoDB Atlas cluster (free tier) — create the indexes listed
+     above once your collections exist
+   - Cloudinary account (free tier) — grab Cloud Name, API Key, API
+     Secret
+   - Brevo account + API key (BREVO_API_KEY — used for every email,
+     never SMTP)
+   - Render account (Docker-based web service for the app + a Cron
+     Job for reminders, or a free external scheduler like
+     cron-job.org hitting your protected `/cron/send-reminders`
+     endpoint with the shared secret)
+
+2. INITIALIZE THE PROJECT
+   - `composer require mongodb/mongodb cloudinary/cloudinary_php
+     firebase/php-jwt vlucas/phpdotenv`
+   - Write a `Dockerfile` that installs PHP, Composer, and the
+     `mongodb` PECL extension, so Render's build produces a working
+     runtime without you needing the extension on your own machine
+   - Set up the folder structure above
+
+3. FEED PHASE 1 OF THE MASTER PROMPT TO CODEX/OPENCODE
+   Test registration/login by deploying early to Render (or running
+   inside a cloud dev container) rather than installing PHP + the
+   mongodb extension locally, per the constraints above.
+
+4. WORK THROUGH PHASES 2–10 SEQUENTIALLY
+   Test each feature end-to-end (including the cron endpoint via a
+   manual curl call with the correct secret header) before telling the
+   AI to proceed to the next phase.
+
+5. WRITE YOUR FIVE CHAPTERS ALONGSIDE THE BUILD
+   - Chapter 1: Introduction — limitations of paper notes/offline
+     apps (no sync, no backup, no accessibility across devices) as the
+     problem statement, objectives, scope, significance
+   - Chapter 2: Literature Review — cloud computing fundamentals
+     (SaaS delivery model, availability/backup benefits), existing
+     to-do/task-management platforms and their feature sets, NoSQL
+     document-model rationale for a task-tracking domain (embedded
+     subtasks/attachments vs relational joins)
+   - Chapter 3: Methodology & System Design — SDLC model used, use
+     case diagram, document-relationship diagram from the schema
+     above, sequence diagram for the deadline-reminder cron flow (show
+     timezone conversion -> threshold check -> dedup-via-reminderLogs
+     -> Brevo API send), architecture diagram (Browser <-> PHP/Render
+     <-> MongoDB Atlas + Cloudinary, plus the separate scheduled-job
+     trigger path)
+   - Chapter 4: Implementation & Testing — screenshots of each module,
+     a demonstrated reminder email actually received, a demonstrated
+     multi-device login showing the same synced task list, and your
+     progress-tracking dashboard with real sample data
+   - Chapter 5: Summary, Conclusion, Recommendations — be candid about
+     the polling-based (not push-based) sync approach and
+     last-write-wins conflict handling as documented, reasonable
+     scope choices for a final year project
+
+6. TESTING CHECKLIST — RUN THESE SCENARIOS AND SCREENSHOT THE RESULTS
+   - Create a task with a due date 25 hours out, manually trigger the
+     cron endpoint -> confirm no reminder yet; adjust the due date to
+     23 hours out, trigger again -> confirm the "24h before" reminder
+     fires exactly once (check reminderLogs, not just your inbox)
+   - Trigger the cron endpoint twice in a row for the same task/window
+     -> confirm only one email is sent (dedup working)
+   - Create a task in a non-Lagos timezone profile -> confirm the
+     reminder fires relative to that timezone, not server time
+   - Mark a recurring task complete -> confirm a new occurrence is
+     generated with the correct next due date, and the original
+     remains in history as completed
+   - Delete a task list with active tasks in it -> confirm your chosen
+     handling (block or reassign) actually happens, never silent
+     cascade-delete
+   - Soft-delete a task, then restore it -> confirm it reappears
+     correctly in its original list with subtasks intact
+   - Log in from two different browsers as the same user -> confirm
+     both show the same task data (proving the "cloud sync" claim)
+   - Export tasks to JSON/CSV -> confirm the file contains accurate,
+     complete data matching what's in the database
+   - Delete a task with a Cloudinary attachment -> confirm the asset is
+     actually removed from your Cloudinary account, not just the DB
+     reference
+
+========================================================================
+NOTES
+========================================================================
+- The timezone-aware, deduplicated reminder system is your strongest
+  piece of "cloud-based" logic — be ready to walk through the exact
+  UTC-storage -> local-timezone-conversion -> threshold-check ->
+  dedup-log sequence in your defense.
+- Be explicit and honest in your report that multi-device sync here
+  is achieved through centralized cloud storage + periodic polling,
+  not push-based WebSocket real-time sync.
+- Soft-delete-by-default (Trash bin) for anything destructive is a
+  small design choice that reads as maturity in a defense.
+- Everything in this project runs against cloud services (MongoDB
+  Atlas, Cloudinary, Brevo, Render) by design — the only unavoidable
+  local requirement is a PHP runtime capable of loading the `mongodb`
+  extension if you ever want to run the app outside of Render/a cloud
+  container; prefer testing via deployment or a cloud dev environment
+  over installing that locally.
+========================================================================
